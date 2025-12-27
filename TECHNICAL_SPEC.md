@@ -7,12 +7,13 @@
 2.  [System Architecture & Operational Flow](#2-system-architecture--operational-flow)
 3.  [Data Lake Architecture & Ingestion](#3-data-lake-architecture--ingestion)
 4.  [RF Signal Analysis & SIGINT Synthesis](#4-rf-signal-analysis--sigint-synthesis)
-    *   4.1 [Variable Provenance & Attribution](#41-variable-provenance--attribution)
-    *   4.2 [The Mathematical Synthesis Pipeline](#42-the-mathematical-synthesis-pipeline)
-    *   4.3 [Spectrograph Visualization Logic](#43-spectrograph-visualization-logic)
-    *   4.4 [Electronic Warfare (EW) Anomaly Detection](#44-electronic-warfare-ew-anomaly-detection)
 5.  [SGP4/SDP4 Orbital Propagation Engine](#5-sgp4sdp4-orbital-propagation-engine)
 6.  [Machine Learning Ensemble Training](#6-machine-learning-ensemble-training)
+    *   6.1 [Universal Feature Vector Specification](#61-universal-feature-vector-specification)
+    *   6.2 [Model A: Deep Neural Autoencoder (Manifold Reconstruction)](#62-model-a-deep-neural-autoencoder-manifold-reconstruction)
+    *   6.3 [Model B: Isolation Forest (Statistical Density)](#63-model-b-isolation-forest-statistical-density)
+    *   6.4 [Model C: k-Nearest Neighbors (Geometric Proximity)](#64-model-c-k-nearest-neighbors-geometric-proximity)
+    *   6.5 [The Ensemble Consensus Model](#65-the-ensemble-consensus-model)
 7.  [Conclusion](#conclusion)
 
 ---
@@ -156,11 +157,29 @@ The engine also projects forward to identify future threats.
 
 ## 6. Machine Learning Ensemble Training
 
-OrbitWatch utilizes a Tri-Model approach to ensure robust detection. All models are trained using **TensorFlow.js** on the localized training set retrieved from the Data Lake.
+OrbitWatch utilizes a Tri-Model Ensemble architecture. This "Consensus Intelligence" approach ensures that no single algorithmic bias results in a false positive. All models are trained client-side using **TensorFlow.js** and custom TypeScript implementations.
 
-### 6.1 Model A: Deep Autoencoder (Neural Reconstruction)
-*   **How it Works**: A Sequential neural network that learns to compress and reconstruct 7-D state vectors.
-*   **Architecture**: I[7-D] -> E[14] -> B[3] -> D[14] -> O[7-D].
+### 6.1 Universal Feature Vector Specification
+All three models consume a normalized 7-dimensional feature vector ($V_{feat}$) derived from the SGP4 mean elements:
+1.  **Inclination ($i$):** Orbital plane tilt relative to the equator.
+2.  **Eccentricity ($e$):** Deviation from a circular orbit.
+3.  **Mean Motion ($n$):** Angular velocity/orbital period indicator.
+4.  **RAAN ($\Omega$):** Right Ascension of the Ascending Node (plane orientation).
+5.  **Argument of Perigee ($\omega$):** Orientation of the elliptical major axis.
+6.  **Mean Anomaly ($M$):** Position of the satellite within the orbit.
+7.  **Orbital Age ($T_{age}$):** Years elapsed since launch (dampening factor for debris).
+
+**Training Dataset Size:** The ensemble trains on the **Last 5 Snapshots** stored in IndexedDB, typically representing a manifold of **1,500 to 3,000 GEO state records**.
+
+### 6.2 Model A: Deep Neural Autoencoder (Manifold Reconstruction)
+**Application Role:** Detects "Physics Violations." This model learns the standard orbital manifold of station-keeping GEO assets.
+
+**Training:** A 6-layer Sequential Neural Network. It learns to compress the 7-D input into a 3-D bottleneck ($z$) and reconstruct the original 7-D vector. It is trained over 30 epochs using the Adam optimizer ($lr=0.01$) on normalized data.
+
+**Scoring & Severity:** 
+*   The score is the **Reconstruction Loss** (Mean Squared Error).
+*   $S_{AE} = \min(1, MSE \times 2)$. 
+*   High scores indicate the satellite has entered a state that is physically "impossible" or "unseen" according to learned nominal physics.
 
 <p align="center">
   <b>FIGURE 3: AUTOENCODER NEURAL ARCHITECTURE</b><br/>
@@ -168,16 +187,96 @@ OrbitWatch utilizes a Tri-Model approach to ensure robust detection. All models 
 
 ```mermaid
 graph LR
-    I[7-D Input] --> E[Encoder Dense 14] --> B[Bottleneck Dense 3] --> D[Decoder Dense 14] --> O[7-D Output]
-    O -.->|MSE Loss| I
-    style B fill:#facc15,color:#000
+    Input[7-D Feature Input] --> Encoder[Dense 14 Tanh] --> Bottleneck[Dense 3 ReLU]
+    Bottleneck --> Decoder[Dense 14 Tanh] --> Output[7-D Reconstruction]
+    Output -.->|Compare MSE| Input
+    
+    style Bottleneck fill:#facc15,stroke:#fff,color:#000
+    style Input fill:#0a0a0a,stroke:#22d3ee,color:#fff
 ```
 
-### 6.2 Model B: Isolation Forest (Statistical Density)
-*   **How it Works**: A tree-based ensemble that partitions the parameter space into 100 independent trees.
+### 6.3 Model B: Isolation Forest (Statistical Density)
+**Application Role:** Detects "Statistical Outliers." This model identifies assets that migrate into sparse regions of the orbital parameter space.
 
-### 6.3 Model C: k-Nearest Neighbors (Geometric Proximity)
-*   **How it Works**: Calculates Euclidean distance to the 5 nearest neighbors in the feature space.
+**Training:** An ensemble of 100 Isolation Trees. Each tree partitions the dataset by randomly selecting a feature and a split value. It treats anomalies as points that require fewer partitions (shorter path lengths) to isolate.
+
+**Scoring & Severity:**
+*   $S_{IF} = 2^{-\frac{E[h(x)]}{c(n)}}$, where $E[h(x)]$ is the average path length across all 100 trees.
+*   A score near 1.0 indicates a highly isolated point; a score < 0.5 indicates a deep-cluster nominal point.
+
+<p align="center">
+  <b>FIGURE 4: ISOLATION FOREST PARTITIONING LOGIC</b><br/>
+</p>
+
+```mermaid
+graph TD
+    Root[Root Node: Random Split] --> L[Left Partition]
+    Root --> R[Right Partition]
+    L --> L1[Isolated: Path Length 2]
+    R --> R1[Node]
+    R1 --> R2[Clustered: Path Length 8]
+    
+    style L1 fill:#ef4444,color:#fff
+    style R2 fill:#22c55e,color:#fff
+```
+
+### 6.4 Model C: k-Nearest Neighbors (Geometric Proximity)
+**Application Role:** Detects "Rendezvous and Proximity Operations (RPO)." Identifies when an asset deviates from its specific neighbors in the feature space.
+
+**Training:** The model indexes a reference set of 500 normalized nominal points. No "weights" are learned; rather, the geometric topology of the GEO belt is stored.
+
+**Scoring & Severity:**
+*   Calculates the **Euclidean Distance** to the $k=5$ nearest neighbors.
+*   $S_{kNN} = \min(1, \text{avgDist} / 5.0)$.
+*   Severity is determined by the "Separation Distance." If an asset moves significantly away from the cluster of similar objects (e.g., a maneuver away from a designated slot), the score spikes.
+
+<p align="center">
+  <b>FIGURE 5: KNN GEOMETRIC CLUSTERING</b><br/>
+</p>
+
+```mermaid
+graph TD
+    subgraph Nominal_Cluster
+        A((Sat 1))
+        B((Sat 2))
+        C((Sat 3))
+    end
+    Target{Anomalous Sat} -.->|d1| A
+    Target -.->|d2| B
+    Target -.->|d3| C
+    
+    style Target fill:#f97316,stroke:#fff,color:#fff
+```
+
+### 6.5 The Ensemble Consensus Model
+The final Risk Score ($S_{total}$) is a weighted aggregate of the three independent models.
+
+**The Probability Formula:**
+$$S_{total} = (0.4 \cdot S_{AE}) + (0.3 \cdot S_{IF}) + (0.3 \cdot S_{kNN})$$
+
+**Severity Mapping:**
+*   **Critical (> 90%):** Immediate hostile attribution (e.g., rapid maneuver + signal jamming).
+*   **High (70-90%):** Confirmed unannounced maneuver.
+*   **Moderate (45-69%):** Orbital drift or age-related decay.
+*   **Low (25-44%):** Minor station-keeping deviation.
+*   **Informational (< 25%):** Nominal noise.
+
+<p align="center">
+  <b>FIGURE 6: ENSEMBLE WEIGHTING & DECISION FLOW</b><br/>
+</p>
+
+```mermaid
+graph TD
+    AE[Model A: 40% Weight] --> AGG[Aggregator]
+    IF[Model B: 30% Weight] --> AGG
+    KNN[Model C: 30% Weight] --> AGG
+    AGG --> RES{Final Risk Score}
+    RES -->| >90 | CRIT[CRITICAL ALERT]
+    RES -->| <25 | NOM[NOMINAL]
+    
+    style AGG fill:#facc15,color:#000
+    style CRIT fill:#ef4444,color:#fff
+```
 
 ---
 
