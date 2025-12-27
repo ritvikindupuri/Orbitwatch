@@ -2,6 +2,11 @@
 
 OrbitWatch is a decentralized Space Domain Awareness (SDA) platform designed for the real-time identification and analysis of Resident Space Objects (RSOs) exhibiting anomalous orbital or spectral behavior. The application serves as a technology demonstrator for automated threat assessment in the Geostationary (GEO) belt, utilizing browser-based Machine Learning and high-fidelity physics propagation.
 
+## Documentation
+For deep technical dives into the system architecture, mathematical models, and machine learning ensemble logic, please refer to the following resource:
+
+*   **[Technical Specification (TECHNICAL_SPEC.md)](./TECHNICAL_SPEC.md)**: Exhaustive breakdown of RF signal synthesis, SGP4 physics propagation, and Tri-Model ML Ensemble training (Autoencoders, Isolation Forests, and kNN).
+
 ## System Overview
 
 The platform operates as a client-side mission control center. It ingests Two-Line Element (TLE) data from public registries, executes SGP4 orbital propagation, and runs a localized Machine Learning ensemble to detect deviations from nominal station-keeping manifolds. It is specifically optimized for the GEO regime, allowing for high-precision maneuver detection that generalized systems often miss.
