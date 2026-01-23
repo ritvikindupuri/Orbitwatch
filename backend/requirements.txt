@@ -1,8 +1,0 @@
-Flask
-Flask-Cors
-requests
-xgboost
-numpy
-pandas
-scikit-learn
-tensorflow
