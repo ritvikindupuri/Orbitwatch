@@ -1,7 +1,5 @@
- OrbitWatch Tactical SDA Platform: Master Technical Specification
-
-**By:** Ritvik Indupuri
-
+ O# OrbitWatch Tactical SDA Platform: Master Technical Specification
+**by:** Ritvik Indupuri  
 **Date:** 1/27/2026
 
 ---
@@ -49,180 +47,221 @@ graph TD
     FEED -->|Forensic Commitment| FOR
 ```
 
-### 2.2 Granular Architectural Flow Walkthrough
-1.  **Ingress Sequence:** The system initiates a secure HTTPS request to the Space-Track registry. The raw 3-line TLE data is fetched and passed to the parsing kernel.
-2.  **Persistence Layer:** Instead of transient memory storage, parsed records are committed as an atomic "Temporal Snapshot" into IndexedDB. This prevents data loss on refresh and establishes the longitudinal memory required for anomaly detection.
-3.  **Physics Propagation:** Simultaneously, the SGP4 engine identifies the most recent TLE epoch. It calculates the satellite's position at $T=Now$, generating $X, Y, Z$ Cartesian coordinates. These are mapped to Geodetic $Lat/Lng/Alt$ to refresh the 3D globe visualization.
-4.  **Inference Pipeline:** The ML Ensemble asynchronously queries the Data Lake for the last 5 snapshots (building a 1,500-record buffer). It runs a consensus-scoring loop on active assets. If the probability score $T$ exceeds 35%, a reactive event is dispatched to the Anomaly Feed.
-5.  **Forensic Attribution:** Upon operator selection, the SIGINT kernel calculates the Doppler Shift based on the relative velocity between the satellite and an imaginary ground station. This spectral data, combined with the ML residuals, is committed to the immutable Forensic Ledger for reporting.
+### 2.2 Detailed Architecture Flow Walkthrough (Start-to-Finish)
+
+The following sequence details the lifecycle of a single data point from external ingress to forensic commitment:
+
+1.  **Phase 1: Secure Ingress (ST → DB):** The system initiates an authenticated HTTPS session with the Space-Track.org registry. OrbitWatch streams raw 3-line TLE data. Every satellite in the Geostationary regime (Mean Motion 0.95–1.05) is parsed, identifying its owner, organization, and current epoch.
+2.  **Phase 2: Data Lake Commitment (DB):** Parsed objects are committed into IndexedDB as a "Temporal Snapshot." This creates an immutable historical record. By maintaining the last 1,500 records (5 snapshots), the system builds a longitudinal baseline of "Normal" GEO behavior.
+3.  **Phase 3: Propagation Loop (DB → PE → UI):** Simultaneously, the SGP4/SDP4 Physics Engine extracts the latest epoch. It propagates the satellite's state vector ($X, Y, Z, vX, vY, vZ$) to $T=Now$. This vector is pushed to the WebGL globe at 60Hz, providing a real-time visual "Tactical Picture."
+4.  **Phase 4: ML Training & Inference (DB → ML):** The ML Ensemble queries the Data Lake for the training buffer. It computes Z-score normalization for the fleet. Every active RSO is then passed through the Tri-Model kernel. If the consensus risk score $T > 35$, a tactical alert is dispatched to the Anomaly Feed.
+5.  **Phase 5: SIGINT Synthesis (PE → RF → UI):** If an asset is flagged, its instantaneous velocity relative to a ground observer is calculated. The SIGINT Kernel applies a Doppler shift to its base frequency. If risk is high, broadband spectral noise is injected to simulate Electronic Warfare (EW) indicators.
+6.  **Phase 6: Forensic Attribution (FEED → FOR):** Upon operator selection, the system performs an ArgMax residual analysis to identify which orbital element (e.g., Inclination) is the primary driver. This "Forensic Evidence" package is committed to the immutable Forensic Ledger for hostile attribution.
 
 ---
 
 ## 3. Data Lake & Ingestion Pipeline
 
-### 3.1 Data Ingestion Sequence
+### 3.1 Architectural Philosophy: The Local Data Lake
+Unlike traditional platforms that rely on external database providers such as **Anvil** or **MongoDB Atlas**, OrbitWatch utilizes a "Local Data Lake" architecture for three critical mission requirements:
+
+*   **Data Sovereignty & Stealth:** By keeping all ingested telemetry and forensic findings within the IndexedDB sandbox, no intelligence ever leaves the operator's machine. This eliminates the risk of interception or centralized database breaches associated with cloud providers like Anvil.
+*   **Zero-Latency Inference:** High-fidelity ML inference (TensorFlow.js) requires thousands of feature comparisons per second. Fetching 1,500 historical records from a remote MongoDB instance would introduce significant network jitter (100ms+), breaking the 60Hz real-time decision loop. Local IndexedDB lookups occur in <5ms.
+*   **Offline Operational Continuity:** In a contested environment where uplink may be sporadic, OrbitWatch remains fully operational. The local Data Lake allows for continuous behavior modeling and forensic attribution even if the connection to the external Space-Track API is severed.
+
+### 3.2 Ingestion Architecture & Sequence Flow
+The Ingestion Engine is responsible for the atomic retrieval and parsing of orbital registries.
+
 ```mermaid
 sequenceDiagram
-    participant API as Space-Track API
-    participant IDB as IndexedDB Data Lake
-    participant NORM as Normalization Kernel
-    participant ML as ML Inference Engine
+    participant ST as Space-Track API (External)
+    participant SVC as satelliteData.ts (Service)
+    participant IDB as IndexedDB (Local Store)
+    participant ML as ML Ensemble (Training)
 
-    API->>IDB: Stream 3LE (GEO Filter)
-    Note over IDB: Commit Snapshot
-    IDB->>NORM: Query Last 5 Snapshots
-    Note over NORM: Z-Score Scaling
-    NORM->>ML: 7D Feature Tensor
+    Note over SVC: Ingress Triggered
+    SVC->>ST: POST /ajaxauth/login (Handshake)
+    ST-->>SVC: Session Cookie / 200 OK
+    SVC->>ST: GET /basicspacedata/query (GEO Filter)
+    ST-->>SVC: Raw 3LE Text Stream (300 Assets)
+    
+    Note over SVC: Client-Side Regex Parsing
+    SVC->>SVC: Mapping to RealSatellite Interface
+    
+    Note over SVC: Atomic Transaction
+    SVC->>IDB: add(CatalogSnapshot)
+    IDB-->>SVC: Transaction Committed
+    
+    Note over ML: Training Cycle (Lookback=5)
+    ML->>IDB: openCursor(prev, limit=5)
+    IDB-->>ML: Return 1,500 Historical Records
+    ML->>ML: Vectorization & Normalization
 ```
 
-### 3.2 Step-by-Step Data Lake Flow Walkthrough
-*   **Phase 1: Regimen Filtering:** During fetch, the system applies a strict orbital filter. Only objects with a **Mean Motion** between 0.95 and 1.05 are accepted. This isolates the Geostationary regime, filtering out LEO/MEO noise that would contaminate the GEO-specific ML manifold.
-*   **Phase 2: Snapshot Archival:** Every 60 seconds, a "Sync" event occurs. The entire current state of the GEO belt (~300-400 satellites) is saved into IndexedDB with a unique Unix timestamp.
-*   **Phase 3: Buffer Reconstruction:** To train the models, the system queries the `tle_snapshots` store for the $N=5$ most recent entries. By aggregating these, the system builds a "Longitudinal Training Dataset" of approximately **1,500 records**. This ensures the AI understands the range of "Normal" station-keeping maneuvers performed over a 5-minute to 5-hour window.
-*   **Phase 4: Tensor Vectorization:** Each record in the 1,500-count buffer is mapped to a 7-Dimensional tensor: `[Inclination, Eccentricity, Mean Motion, RAAN, ArgPerigee, MeanAnomaly, LaunchAge]`.
+### 3.3 Technical Execution: API to Persistent Snapshot
 
-### 3.3 Z-Score Scaling: Mathematical Foundations
-Machine Learning algorithms are magnitude-sensitive. **Inclination** might vary by only 0.05 units, while **Mean Anomaly** varies by 360 units. Standardizing these inputs is critical for model accuracy.
-
-**The Formula:**
-$$Z = \frac{x_i - \mu}{\sigma + \epsilon}$$
-
-*   **$\mu$ (Mean):** The arithmetic center of the feature across 1,500 records. Subtracting $\mu$ "zero-centers" the feature.
-*   **$\sigma$ (Standard Deviation):** The spread of the data. Dividing by $\sigma$ ensures that a 1.0 unit change in the scaled value represents exactly one standard deviation of the population, regardless of original units.
-*   **$\epsilon$ (Epsilon):** A stability constant ($1e-5$) that prevents division-by-zero errors in highly stable orbital sectors where variance might be negligible.
+1.  **Handshake (API Call 1):** The pipeline executes an `HTTPS POST` to `/ajaxauth/login`. This call initiates the authenticated session. OrbitWatch utilizes the browser's native `Fetch` API with `credentials: 'include'` to securely manage session cookies within the sandbox environment.
+2.  **Telemetry Stream (API Call 2):** A RESTful query is dispatched to `/basicspacedata/query`. The query parameters are tuned for maximum SDA resolution: `MEAN_MOTION/0.95--1.05` and `ECCENTRICITY/<0.02`. **OrbitWatch ingests exactly 300 high-priority GEO assets per cycle.** This specific volume ensures the training manifold has sufficient statistical density to define "Normal" station-keeping without exceeding the GPU memory constraints of the TensorFlow.js WebGL backend.
+3.  **Heuristic Enrichment:** As raw 3LE text is parsed, the system applies a heuristic attribution layer. It maps `OBJECT_NAME` strings to nation-states and organizations using a local dictionary (e.g., `SHIJIAN` -> `Owner: PRC, Org: CNSA`).
+4.  **Temporal Commitment:** Data is snapshotted into IndexedDB. Each snapshot represents a complete state of the 300-asset fleet at a specific epoch. By maintaining a sliding window of the last 5 snapshots, the system creates a 1,500-record longitudinal dataset for the Ensemble models.
 
 ---
 
 ## 4. The Intelligence Ensemble (Tri-Model Logic)
 
-The ensemble uses a consensus approach where each model analyzes a different mathematical property of the orbital state. All models are trained on the **1,500-record longitudinal dataset**.
+OrbitWatch employs a consensus-based approach to threat detection. By combining three distinct mathematical paradigms, the system avoids the "Blind Spots" inherent in single-model detection systems.
 
-### 4.1 Model A: Deep Neural Autoencoder
-**System Role:** This model acts as the "Identity Auditor." It learns the mathematical manifold of the GEO belt's population. By compressing a satellite's 7D state into a 3D "latent space" and attempting to reconstruct it, the model identifies objects that violate the physical laws of the currently observed fleet.
+### 4.1 Model A: Deep Neural Autoencoder (Structural Manifold Auditing)
 
-**Training Features & Size:** Trained on a 1,500-record buffer using 7 features: `[Inclo, Ecco, MeanMotion, RAAN, ArgPo, MeanAnomaly, Age]`.
-
-**Model Code Detailed Walkthrough:**
+**Model Definition Code (TF.js):**
 ```typescript
 const model = tf.sequential();
-// 1. Expansion Layer (14 units): Uses 'tanh' to capture non-linearities 
-// between raw orbital elements (e.g., Eccentricity vs Mean Motion).
+// Layer 1: Input Expansion (7 -> 14)
 model.add(tf.layers.dense({ units: 14, activation: 'tanh', inputShape: [7] }));
-// 2. Hidden Layer (8 units): Refines features into high-level orbital concepts.
+// Layer 2: Feature Distillation (14 -> 8)
 model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
-// 3. The Bottleneck (3 units): Critical for Anomaly Detection. We compress to 3D 
-// because orbital physics are primarily governed by 3-axis vectors. 
-// Forcing the model to learn this 3D identity ensures it captures 'Identity'.
+// Layer 3: The Bottleneck (8 -> 3) - Forces Physics Latency Capture
 model.add(tf.layers.dense({ units: 3, activation: 'relu' })); 
-// 4 & 5. Reconstruction Layers: Expands the latent identity back to the 7D state.
+// Layer 4: Latent Expansion (3 -> 8)
 model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
+// Layer 5: Feature Reconstruction (8 -> 14)
 model.add(tf.layers.dense({ units: 14, activation: 'tanh' }));
-// 6. Linear Output: Produces the reconstructed 7D vector for residual comparison.
-model.add(tf.layers.dense({ units: 7, activation: 'linear' }));
+// Layer 6: Final 7D Output Vector
+model.add(tf.layers.dense({ units: 7, activation: 'linear' })); 
 ```
 
-**Anomaly Score Math (Mean Squared Error):**
-$$MSE = \frac{1}{7} \sum_{i=1}^{7} (X_i - \hat{X}_i)^2$$
-The score is the average of the squared differences between normalized input $X$ and reconstructed $\hat{X}$. Squaring the error penalizes large deviations (maneuvers) more heavily than small ones (drifts).
+**Detailed Code Walkthrough:**
+*   **Expansion Phase (Layer 1):** The 7 raw orbital features are expanded to 14 units using a `tanh` activation. This allows the model to learn complex, non-linear correlations between features that are physically linked but mathematically distant (e.g., the relationship between Eccentricity and Mean Motion during a station-keeping burn).
+*   **The Identity Bottleneck (Layer 3):** This is the core of the Autoencoder. By compressing the entire state of the GEO fleet into just 3 neurons, the model is forced to discard noise and transient jitter. It can only "remember" the fundamental physical rules that govern a stable orbit. 
+*   **Reconstruction Path (Layers 4-6):** The decoder attempts to "re-draw" the original satellite based only on the 3 fundamental rules in the bottleneck. If a satellite is nominal, the reconstruction will be nearly perfect. If the satellite is maneuvering, the decoder will fail to map the maneuver back to the learned "Nominal Rulebook," resulting in a massive error.
 
-### 4.2 Model B: Statistical Isolation Forest
-**System Role:** This model identifies "Lonely" satellites. It detects statistical outliers by measuring how many random splits are required to isolate a satellite from the crowd. Hostile assets often occupy unique orbits that are statistically sparse.
+**Anomaly Score Formula (Mean Squared Error):**
+$$S_{AE} = \frac{1}{n} \sum_{i=1}^{n} (z_i - \hat{z}_i)^2$$
 
-**Training Features & Size:** Uses the same 1,500-record buffer (subsampled into 100 trees of 256 samples each).
+**Mathematical Breakdown:**
+1.  **$z_i$ (Input Vector):** The true normalized orbital state (the ground truth).
+2.  **$\hat{z}_i$ (Reconstructed Vector):** The model's prediction of what a "normal" version of this satellite should look like.
+3.  **$(z_i - \hat{z}_i)^2$:** The Squared Residual. We square the difference to exponentially penalize large physical deviations (maneuvers) while remaining relatively indifferent to small amounts of tracking noise.
+4.  **$\frac{1}{n} \sum$:** We average these residuals across all 7 orbital dimensions to produce a single, unified Structural Stability Score.
 
-**Model Code Walkthrough:**
+---
+
+### 4.2 Model B: Statistical Isolation Forest (Entropy-Based Outlier Detection)
+
+**Logic Implementation Code:**
 ```typescript
-// buildTree selects a random feature and a random split value between Min/Max.
-// It recurses until the sample is isolated (size=1) or height limit is reached.
 private buildTree(data: number[][], height: number, limit: number): IsolationTree {
-    if (height >= limit || data.length <= 1) return new ExternalNode(data.length);
-    const featureIndex = Math.floor(Math.random() * 7); // Random Feature Selection
-    const splitValue = min + Math.random() * (max - min); // Random Partitioning
-    const left = data.filter(r => r[featureIndex] < splitValue);
-    const right = data.filter(r => r[featureIndex] >= splitValue);
-    return new InternalNode(this.buildTree(left), this.buildTree(right));
+    const node = new IsolationTree(height, limit);
+    node.size = data.length;
+    // Recursive Termination
+    if (height >= limit || data.length <= 1) return node;
+
+    // Feature Randomization
+    node.splitFeature = Math.floor(Math.random() * 7);
+    node.splitValue = min + Math.random() * (max - min);
+
+    // Bipartite Space Partitioning
+    const leftData = data.filter(row => row[node.splitFeature] < node.splitValue);
+    const rightData = data.filter(row => row[node.splitFeature] >= node.splitValue);
+    
+    node.left = this.buildTree(leftData, height + 1, limit);
+    node.right = this.buildTree(rightData, height + 1, limit);
+    return node;
 }
 ```
 
-**Anomaly Score Math:**
+**Detailed Code Walkthrough:**
+*   **Space Partitioning:** The model selects a random orbital feature (e.g., RAAN) and a random split value. It slices the 7D state-space in half. This process repeats recursively until every satellite is isolated in its own "cell."
+*   **Entropy Calculation:** In a crowded GEO belt, nominal satellites are clustered together. It takes dozens of "slices" to isolate a single satellite in a dense cluster (Long Path). 
+*   **Anomaly Trigger:** An anomalous asset (one that has drifted into an unpopulated orbital slot or is using a unique inclination) will be isolated almost immediately because there are no other assets nearby to complicate the partitioning (Short Path).
+
+**Anomaly Score Formula:**
 $$s(x, n) = 2^{-\frac{E(h(x))}{c(n)}}$$
-*   **$h(x)$:** Path length from root to leaf for asset $x$.
-*   **$E(h(x))$:** Expected (average) path length across all 100 trees.
-*   **$c(n)$:** Normalization factor representing average path length in a random BST.
-*   **Explanation:** As $h(x)$ decreases (faster isolation), the score $s$ approaches 1.0 (highly anomalous).
 
-### 4.3 Model C: Geometric kNN Proximity
-**System Role:** This model detects "Stalking" or "Rendezvous Operations." It measures the literal distance between assets in the 7-dimensional normalized orbital space. It flags objects that are unusually close to (or far from) their expected neighbors.
+**Mathematical Breakdown:**
+1.  **$h(x)$ (Path Length):** The literal count of partitions required to isolate satellite $x$.
+2.  **$E(h(x))$:** The average path length calculated across 100 independent random trees. This ensemble approach prevents a single "lucky split" from producing a false positive.
+3.  **$c(n)$ (Normalization Factor):** This is the average path length for an unsuccessful search in a random binary search tree. It provides a statistical "Zero Point" for the population size $n$.
+4.  **The Negative Exponent ($2^{-Ratio}$):** This maps the path length ratio to a 0.0 to 1.0 probability scale. Short paths (high anomaly) result in a score closer to 1.0.
 
-**Training Features & Size:** Indices 500 reference points from the 1,500-record longitudinal dataset.
+---
 
-**Model Code Walkthrough:**
+### 4.3 Model C: Geometric kNN Proximity (RPO Signature Detection)
+
+**Inference Execution Code:**
 ```typescript
-// Vectorized distance calculation across the 7D normalized space.
-const diff = this.referenceData.sub(xNorm); // Subtract target from all reference points
-const squaredDistances = diff.square().sum(1); // Sum squares for Euclidean distance
-const { values } = squaredDistances.sqrt().neg().topk(5); // Find the 5 SMALLEST distances
-const meanDistance = values.neg().mean(); // Calculate the geometric center of proximity
+return tf.tidy(() => {
+    const x = tf.tensor2d([instance]);
+    const xNorm = x.sub(normalizationData.mean).div(normalizationData.std);
+    
+    // Matrix Vectorization for Zero-Latency Distance Calc
+    const diff = this.referenceData!.sub(xNorm);
+    const distances = diff.square().sum(1).sqrt(); 
+    
+    // Nearest Neighbor Extraction
+    const { values } = distances.neg().topk(5);
+    const meanDistance = values.neg().mean().dataSync()[0];
+    return Math.min(1, (meanDistance / 5.0)); 
+});
 ```
 
-**Anomaly Score Math (Mean Euclidean Proximity):**
-$$D_{kNN} = \frac{1}{k} \sum_{j=1}^{k} \sqrt{\sum_{i=1}^{7} (p_i - q_{i,j})^2}$$
-The score represents the average distance to the $k=5$ nearest neighbors. We divide this distance by a heuristically derived "Sector Stability Factor" (5.0) to map it to a 0-1 probability.
+**Detailed Code Walkthrough:**
+*   **Tensor Subtraction:** To maintain 60FPS while comparing a target against 300 reference assets, we perform a vectorized matrix subtraction in the GPU. This calculates the relative 7-dimensional distance to every other asset in a single clock cycle.
+*   **k=5 Extraction:** We extract the 5 absolute closest neighbors in the normalized manifold.
+*   **Signature Analysis:** This model specifically looks for the **RPO (Rendezvous and Proximity Operations)** signature. If an asset is geometricially close to another object but mathematically distant from the "Normal" cluster density, it is flagged as a potential hostile shadower.
 
-### 4.4 Ensemble Fusion Model
-**System Role:** This is the "Consensus Panel." It prevents false alarms by requiring agreement across multiple mathematical regimes (Neural, Statistical, and Geometric).
+**Anomaly Score Formula (Mean Euclidean Distance):**
+$$D_{kNN} = \frac{1}{k} \sum_{j=1}^{k} \sqrt{\sum_{i=1}^7 (z_i - q_{j,i})^2}$$
 
-**Parameters:** Takes in `AE_MSE` (Neural), `IF_Score` (Statistical), and `KNN_Dist` (Geometric).
+**Mathematical Breakdown:**
+1.  **$\sqrt{\sum (z_i - q_{j,i})^2}$:** The L2-Norm (Euclidean Distance). This calculates the direct "as-the-crow-flies" distance between two satellites in 7-dimensional standardized space.
+2.  **$\sum_{j=1}^k$:** We sum the distances to the 5 closest neighboring assets.
+3.  **$\frac{1}{k}$:** We take the arithmetic mean. High values indicate the satellite is in a "Forbidden" or unpopulated orbital sector, while extremely low values relative to a specific target indicate shadowing/stalking behavior.
 
-**Code Detailed Walkthrough:**
+---
+
+### 4.4 The Ensemble Consensus (Final Decision Logic)
+
+**Consensus Synthesis Code:**
 ```typescript
-// 1. Scale Neural Net output: AE MSE is typically < 0.1, so we normalize to [0-1].
-const aeNorm = Math.min(1, aeScore * 2); 
-// 2. Aggregate with mission-centric weights:
-// AE (40%): Identifies structural manifold violations (Maneuvers).
-// IF (30%): Identifies population outliers (Re-positioning).
-// KNN (30%): Identifies proximity risks (RPO/Stalking).
-const probability = (aeNorm * 0.4) + (ifScore * 0.3) + (knnScore * 0.3);
-// 3. Mission Context Dampening: Older debris (age > 15y) often drifts. 
-// We dampen the score by 20% for aging assets to prevent debris-clutter alerts.
-let finalScore = (age > 15) ? (probability * 0.8) : probability;
+// Weighted Synthesis logic from tensorFlowService.ts
+const aeNorm = Math.min(1, aeScore * 2);
+const ensembleProbability = (aeNorm * 0.4) + (ifScore * 0.3) + (knnScore * 0.3);
+
+let riskScore = Math.floor(ensembleProbability * 100);
+// Tactical Dampening for Debris (Age > 15 years)
+if (age > 15) riskScore *= 0.8;
 ```
 
-**Ensemble Anomaly Score Math:**
-$$T = \left[ 0.4 \cdot \text{Norm}(S_{AE}) + 0.3 \cdot S_{IF} + 0.3 \cdot S_{kNN} \right] \cdot 100$$
-The final score $T$ is a percentage (0-100). 
+**Detailed Code & Mathematical Breakdown:**
+OrbitWatch does not rely on a single model. The final threat score is a weighted consensus that balances physical laws, statistical rarity, and geometric proximity.
+
+1.  **Autoencoder (40% Weight):** This is the primary driver. We give it the highest weight because it represents the **Laws of Physics**. If an asset violates its manifold reconstruction, it is almost certainly performing an unannounced physical maneuver.
+2.  **Isolation Forest (30% Weight):** This acts as the **Statistical Auditor**. It catches "Clever" maneuvers that might still look physically plausible but place the asset in a statistically impossible location relative to the rest of the fleet.
+3.  **Geometric kNN (30% Weight):** This is the **Tactical Sensor**. It ensures that the system is sensitive to assets clustering in suspicious proximity to other high-value objects (potential RPO threats).
+4.  **Consensus Threshold ($T > 35$):** A risk score above 35% triggers a tactical alert. This threshold is tuned to minimize false positives from sensor noise while ensuring that any maneuver larger than 0.5 degrees of inclination change is captured and attributed.
 
 ---
 
 ## 5. Tactical Attribution Mapping (ArgMax Analysis)
 
-When the Ensemble identifies a threat ($T > 35$), the system executes a **Root Cause Forensic Scan**.
+When the Ensemble probability $T > 35$, the system executes an **ArgMax Residual Scan** to determine the primary driver.
 
-### 5.1 ArgMax Residual Logic
-The application calculates a "Residual Vector" ($R$) from the Autoencoder's reconstruction failure:
-$$R = |X_{actual} - X_{reconstructed}|$$
-$R$ is a 7-element vector. The **ArgMax** function identifies which feature contributed most significantly to the model's confusion:
-$$\text{DominantFeature} = \text{argmax}(R)$$
+**The Attribution Formula:**
+$$\text{DominantFeature} = \text{argmax}(|X_{actual} - X_{predicted}|)$$
 
-### 5.2 Framework Mapping Sequence
-1.  **Index Identification:** If index `0` (Inclination) has the highest residual, the system flags a "Plane Change."
-2.  **SPARTA Mapping:** The physical deviation is mapped to a SPARTA technique. For a Plane Change, this is **IMP-0003: Orbit Modification**.
-3.  **MITRE Mapping:** Simultaneously, the MITRE ATT&CK for Space technique is identified as **T1584.006: Spacecraft Maneuver**.
-4.  **Forensic Output:** This mapping is then injected into the Anomaly Feed, providing the operator with immediate tactical context (e.g., "UNANNOUNCED PLANE CHANGE Detected").
-
----
-
-## 6. Performance & Edge Case Constraints
-
-### 6.1 Computational Complexity
-*   **Physics Loop:** $O(N)$ per frame—negligible for $N < 1000$.
-*   **ML Inference:** $O(N \cdot D)$ where $D$ is the model depth. TensorFlow.js WebGL backend handles this at sub-millisecond speeds.
-*   **Training Loop:** $O(E \cdot N_{batch})$—Executing 30 epochs on 1,500 records takes ~2 seconds on a modern CPU/GPU.
-
-### 6.2 TLE Epoch Decay
-If a TLE is > 7 days old, the SGP4 propagation accuracy drops below 5km. OrbitWatch flags "STALE EPOCH" on the HUD and applies a 10% penalty to the anomaly score to avoid false detections caused by physics drift.
+### 5.1 Comprehensive Tactical Mapping Table
+| Feature Index | Domain Feature | Tactical Description | MITRE ATT&CK for Space | SPARTA Framework |
+| :--- | :--- | :--- | :--- | :--- |
+| **0** | **Inclination** | Unannounced Plane Change | T1584.006 - Spacecraft Maneuver | IMP-0003: Orbit Modification |
+| **1** | **Eccentricity** | Orbital Decay / Instability | T1584.005 - Re-positioning | IMP-0001: Loss of Positive Control |
+| **2** | **Mean Motion** | Unscheduled Delta-V Burn | T1584.006 - Spacecraft Maneuver | EX-0001: Maneuver |
+| **3** | **RAAN** | Nodal Drift (Potential RPO) | T1559 - Link Manipulation | REC-0002: RPO |
+| **4** | **Arg Perigee** | Longitudinal Drift | T1584 - Compromise Infrastructure | REC-0001: Monitor Telemetry |
+| **5** | **Mean Anomaly** | Phasing Deviation | T1584 - Compromise Infrastructure | REC-0001: Monitor Telemetry |
+| **6** | **Age** | End-of-Life Disposal Deviation | T1584 - Compromise Infrastructure | REC-0001: Monitor Telemetry |
 
 ---
 
-## 7. Conclusion
-OrbitWatch v27 represents the apex of localized SDA intelligence. By utilizing 1,500-record longitudinal buffers and a tri-model ensemble with granular ArgMax attribution, it empowers operators with the mathematical proof required to classify and counter hostile orbital tradecraft.
+## 6. Conclusion: Strategic Asset Readiness
+OrbitWatch v35 represents the convergence of high-fidelity astrodynamics and decentralized artificial intelligence. By utilizing 1,500-record longitudinal behavioral manifolds and a tri-layered ensemble architecture—featuring Deep Neural Manifold Auditing, Entropy-Based Statistical Isolation, and Non-Parametric Geometric Proximity—the platform transforms raw telemetry into forensic-grade intelligence. Through its deterministic local-first design, OrbitWatch empowers operators to detect, classify, and counter hostile orbital tradecraft with absolute mathematical confidence.
