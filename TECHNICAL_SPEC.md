@@ -1,5 +1,5 @@
 
- OrbitWatch Tactical SDA Platform: Master Technical Specification
+OrbitWatch Tactical SDA Platform: Technical Specification
 
 **By:** Ritvik Indupuri  
 
