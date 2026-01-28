@@ -1,8 +1,5 @@
-
-OrbitWatch Tactical SDA Platform: Technical Specification
-
-**By:** Ritvik Indupuri  
-
+ OrbitWatch Tactical SDA Platform: Master Technical Specification
+**By:** Ritvik Indupuri
 **Date:** 1/27/2026
 
 ---
@@ -69,11 +66,11 @@ sequenceDiagram
     participant NORM as Normalization Kernel
     participant ML as ML Inference Engine
 
-    API->|Stream 3LE (GEO Filter)| IDB
+    API->>IDB: Stream 3LE (GEO Filter)
     Note over IDB: Commit Snapshot
-    IDB->|Query Last 5 Snapshots| NORM
+    IDB->>NORM: Query Last 5 Snapshots
     Note over NORM: Z-Score Scaling
-    NORM->|7D Feature Tensor| ML
+    NORM->>ML: 7D Feature Tensor
 ```
 
 ### 3.2 Step-by-Step Data Lake Flow Walkthrough
@@ -226,4 +223,4 @@ If a TLE is > 7 days old, the SGP4 propagation accuracy drops below 5km. OrbitWa
 ---
 
 ## 7. Conclusion
-OrbitWatch represents the apex of localized SDA intelligence. By utilizing 1,500-record longitudinal buffers and a tri-model ensemble with granular ArgMax attribution, it empowers operators with the mathematical proof required to classify and counter hostile orbital tradecraft.
+OrbitWatch v27 represents the apex of localized SDA intelligence. By utilizing 1,500-record longitudinal buffers and a tri-model ensemble with granular ArgMax attribution, it empowers operators with the mathematical proof required to classify and counter hostile orbital tradecraft.
