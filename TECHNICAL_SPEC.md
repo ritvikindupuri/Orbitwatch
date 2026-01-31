@@ -1,4 +1,4 @@
-# OrbitWatch Tactical SDA Platform:  Technical Specification
+# OrbitWatch Tactical SDA Platform: Master Technical Specification
 
 **by:** Ritvik Indupuri  
 
@@ -17,7 +17,7 @@ The platform utilizes a decentralized "Stealth-Local" paradigm. By executing hig
 
 The architecture follows a strictly decoupled "Sense-Think-Act" pipeline to maintain a 60FPS UI while performing multi-threaded mathematical inference.
 
-### 2.1 Full System Architecture Diagram
+### 2.1 Full System Architecture Diagram & Walkthrough
 ```mermaid
 graph TD
     subgraph "External Intelligence Ingress"
@@ -58,6 +58,24 @@ graph TD
     FOR -.->|Forensic Push| MID
     MID -->|Secured API Call| ES
 ```
+
+#### Detailed Architectural Flow & Elastic Integration
+The OrbitWatch pipeline is designed for "Local Execution, Global Intelligence." The following sequence details how data traverses from deep space registries to a multi-operator cloud ledger:
+
+1.  **Ingress Phase (ST → DB):** Raw 3-Line Element (3LE) data is ingested from Space-Track.org via an authenticated SSL tunnel and committed directly to **IndexedDB (Hot Storage)**. This ensures that even if the internet is lost, the mission continues using the local data lake.
+2.  **The Local Core (DB → PE/ML):**
+    *   **Physics Loop:** The **SGP4 Engine (PE)** pulls the current epoch from the DB every second, propagating state vectors to the **WebGL HUD (UI)** for real-time tracking and calculating velocity deltas for the **SIGINT Kernel (RF)**.
+    *   **Inference Loop:** The **ML Ensemble (ML)** monitors the DB's historical buffer, building longitudinal manifolds to identify behavioral deviations.
+3.  **The Tactical Feedback Loop (ML/RF → FEED/UI):**
+    *   The ML ensemble pushes Consensus Risk Scores to the **Anomaly Feed (FEED)**.
+    *   The SIGINT kernel renders Power Spectral Density (PSD) graphs to the HUD.
+    *   Operators interact with the **Triage Feed** to select targets, which updates the 3D POV on the Globe.
+4.  **Forensic Commitment (FEED → FOR):** When a threat is verified, the operator commits the evidence to the **Forensic Ledger Module (FOR)**. This encapsulates SGP4 dynamics, ML scores, and RF snapshots into a single immutable forensic package.
+5.  **The Intelligence Relay (DB/FOR → MID → ES):**
+    *   **Automated Sync:** The local database lake continuously mirrors new telemetry to the **Node.js Middleware (MID)** via a non-blocking background task.
+    *   **Forensic Push:** When a forensic package is created, it is immediately pushed to the Middleware.
+    *   **Cloud Ledgering:** The Middleware appends a high-resolution Mission ID and UTC timestamp to the payload. It then executes a **Secured API Call** to the **Elasticsearch Cloud (ES)**.
+    *   **Operational Value:** This bridge transforms local browser activity into a searchable global index (`sda-intelligence-ledger`). Disparate operators can now perform fleet-wide historical pattern matching using Kibana, identifying "hostile maneuvers" that occurred across different mission windows and geographies.
 
 ---
 
@@ -128,47 +146,45 @@ The Autoencoder identifies structural deviations by attempting to reconstruct th
 
 **Formula:** $S_{AE} = \frac{1}{n} \sum_{i=1}^{n} (z_i - \hat{z}_i)^2$
 
-**Mathematical Breakdown:**
-*   $z$: The original 7-dimensional normalized input vector representing the satellite's state.
-*   $\hat{z}$: The reconstructed vector produced by the neural network's decoder.
-*   $n$: The number of dimensions (fixed at 7).
-*   **Logic:** The model is trained to learn the "Identity Function" of the GEO orbital manifold. If a satellite maneuvers, its features (e.g., Mean Motion vs. Eccentricity) no longer align with the learned correlations. The network fails to "compress/decompress" accurately, resulting in a high Mean Squared Error (MSE).
-*   **Normalization:** The raw MSE is mapped to a probability $P_{AE} \in [0, 1]$ where 1 represents absolute structural deviation.
+**Mathematical Breakdown & Logic:**
+*   **Input Vector ($z$):** A 7-dimensional normalized state representing the asset's current orbital behavior.
+*   **Reconstruction ($\hat{z}$):** The prediction produced after passing $z$ through the 3D bottleneck (latent space).
+*   **Sum of Squared Errors (SSE):** The numerator $\sum (z - \hat{z})^2$ calculates the cumulative variance.
+*   **Structural Auditing:** The model is trained on a "normal" population. If an asset performs a maneuver (Delta-V burn), the correlations between features (like Mean Motion and Eccentricity) break. The network, optimized for standard physics, fails to reconstruct this "non-standard" manifold accurately.
+*   **Normalization:** The resulting MSE ($S_{AE}$) is normalized against the fleet's average variance to produce $P_{AE} \in [0, 1]$.
 
 ### 5.2 Model B: Isolation Forest (Statistical Entropy)
-The Isolation Forest measures how "easy" it is to separate a specific satellite from the rest of the GEO population.
+The Isolation Forest measures the statistical isolation of a satellite by randomly partitioning the 7D feature space.
 
 **Formula:** $s(x, n) = 2^{-\frac{E(h(x))}{c(n)}}$
 
-**Mathematical Breakdown:**
-*   $h(x)$: The path length (number of edges) from the root node to the leaf isolating instance $x$.
-*   $E(h(x))$: The average path length calculated across an ensemble of 100 random isolation trees.
-*   $c(n)$: The average path length of a binary search tree with $n$ nodes, used as a normalization factor: $c(n) = 2H(n-1) - \frac{2(n-1)}{n}$.
-*   **Logic:** Anomalous satellites (outliers) exist in low-density regions of the feature space. Randomly splitting features will isolate these points much faster (shorter path length) than points in dense clusters.
-*   **Risk Score:** When $s(x, n) \rightarrow 1$, the instance is a statistical anomaly. When $s(x, n) < 0.5$, the behavior is considered nominal.
+**Mathematical Breakdown & Logic:**
+*   **Path Length ($h(x)$):** The number of splits (edges) required to isolate the instance $x$ in an Isolation Tree.
+*   **Normalization Constant ($c(n)$):** The average path length of a binary search tree with $n$ nodes, calculated as $c(n) = 2H(n-1) - \frac{2(n-1)}{n}$, where $H(i)$ is the harmonic number.
+*   **Entropy Scoring:** Anomalies are far easier to "isolate" than normal data points. Therefore, an anomalous satellite will have a much shorter path length $E(h(x))$ than a clustered "normal" asset.
+*   **Probability:** As the expected path length decreases, the exponent approaches 0, and $s(x, n)$ approaches 1.0 (Critical Statistical Anomaly).
 
-### 5.3 Model C: Geometric kNN (Geometric Proximity Analysis)
-This model performs density estimation by calculating the average distance to the nearest $k$ behavioral neighbors.
+### 5.3 Model C: Geometric kNN (Density-Based Proximity)
+This model performs physical proximity audits by calculating the average distance to the nearest $k$ behavioral neighbors.
 
 **Formula:** $D_{kNN} = \frac{1}{k} \sum_{j=1}^{k} \sqrt{\sum_{i=1}^7 (z_i - q_{j,i})^2}$
 
-**Mathematical Breakdown:**
-*   $z$: The 7D feature vector of the target asset.
-*   $q_j$: The feature vector of the $j$-th nearest neighbor in the 300-object fleet registry.
-*   $k$: The neighbor hyperparameter (standard $k=5$).
-*   **Logic:** The formula calculates the average **Euclidean Distance** to the closest 5 neighbors in the behavioral space. A high average distance indicates that the satellite has moved into a unique "orbital neighborhood" or is performing a solo maneuver away from its established constellation cluster.
-*   **Normalization:** $P_{kNN} = \min(1, \frac{D_{kNN}}{\sigma})$ where $\sigma$ is the fleet-wide standard deviation of neighbor distances.
+**Mathematical Breakdown & Logic:**
+*   **Euclidean Distance:** $\sqrt{\sum (z_i - q_{j,i})^2}$ computes the direct 7D distance between the target $z$ and its $j$-th neighbor $q$.
+*   **Vectorization:** OrbitWatch uses matrix subtraction on the GPU to compute distances to all 300 neighbors simultaneously.
+*   **RPO Detection:** In GEO, assets generally cluster by nation-state or mission. If an asset's average distance to its 5 closest neighbors ($k=5$) spikes, it indicates it has moved into a "void" or an unauthorized geometric sector.
+*   **Threat Mapping:** $P_{kNN} = \text{Sigmoid}(D_{kNN})$ maps the geometric isolation to a standardized risk probability.
 
 ### 5.4 The Weighted Consensus Score (Final Attribution)
 The system aggregates the three individual probabilities into a single **Aggregate Threat Consensus** ($T$).
 
 **Ensemble Formula:** $T = (w_1 \cdot P_{AE}) + (w_2 \cdot P_{IF}) + (w_3 \cdot P_{kNN})$
 
-**Weight Distribution:**
-*   $w_1 = 0.40$ (Structural): Highest priority as it detects internal "flight style" deviations.
-*   $w_2 = 0.30$ (Statistical): Flags assets that are mathematically unique in the current population.
-*   $w_3 = 0.30$ (Geometric): Monitors physical/geometric isolation in the GEO belt.
-*   **Operational Confidence:** An asset is only flagged as "Critical" if multiple models agree. This multi-perspective audit significantly reduces false positives from station-keeping maneuvers.
+**Weight Distribution Logic:**
+*   **$w_1 = 0.40$ (Structural):** Prioritized because structural manifold deviation is the strongest indicator of a persistent physical maneuver.
+*   **$w_2 = 0.30$ (Statistical):** Provides context on population rarity.
+*   **$w_3 = 0.30$ (Geometric):** Critical for flagging Rendezvous and Proximity Operations (RPO).
+*   **Confidence Thresholds:** $T > 0.90$ triggers a **Critical Attribution Alert**, requiring immediate human triage.
 
 ---
 
@@ -262,21 +278,9 @@ const ensembleProbability = (aeNorm * 0.4) + (ifScore * 0.3) + (knnScore * 0.3);
 
 ---
 
-## 7. Hybrid Elastic Architecture (Intelligence Relay)
+## 7. Security Architecture & Credential Masking
 
-### 7.1 Data Synchronization & Detailed Flow
-The platform utilizes a **Hybrid persistence layer**:
-1.  **IndexedDB (Hot Storage):** Stores the last 60 minutes of telemetry for 60Hz UI updates.
-2.  **Intelligence Relay (Middleware):** The `relayService.ts` monitors local database commits. New TLE snapshots or Forensic Packages are mirrored to `http://localhost:3000/v1/mission-relay`.
-3.  **Elasticsearch (Cold Storage):** The relay `server.js` appends a mission ID and high-resolution timestamp, then commits the package to the `sda-intelligence-ledger` index. 
-    *   **Fleet-Wide Sync:** Allows different operators to contribute to a shared global forensic ledger.
-    *   **Query Logic:** Queries are executed via the index. Operators can perform `GET /_search` with Lucene or KQL via Kibana to identify historical hostile signatures.
-
----
-
-## 8. Security Architecture & Credential Masking
-
-### 8.1 The Relay Pattern (server.js Integration)
+### 7.1 The Relay Pattern (server.js Integration)
 The system "air-gaps" Elasticsearch credentials from the client-side browser:
 *   **Secret Encapsulation:** All sensitive variables (`ELASTIC_URL`, `ELASTIC_PASSWORD`) reside exclusively in the private memory of the Node.js `server.js` process.
 *   **Proxy Logic:** 
@@ -286,8 +290,7 @@ The system "air-gaps" Elasticsearch credentials from the client-side browser:
 
 ---
 
-## 9. Conclusion: Strategic Asset Readiness
-OrbitWatch v35 represents the convergence of high-fidelity astrodynamics and decentralized artificial intelligence. By utilizing 1,500-record longitudinal behavioral manifolds and a tri-layered ensemble architecture—secured by a robust, credential-masked relay to Elasticsearch Cloud—the platform transforms raw telemetry into forensic-grade intelligence with absolute mathematical and operational confidence.
+## 8. Conclusion: Strategic Asset Readiness
+OrbitWatch represents the convergence of high-fidelity astrodynamics and decentralized artificial intelligence. By utilizing 1,500-record longitudinal behavioral manifolds and a tri-layered ensemble architecture—secured by a robust, credential-masked relay to Elasticsearch Cloud—the platform transforms raw telemetry into forensic-grade intelligence with absolute mathematical and operational confidence.
 
 ---
-*Operational ID: OW-STEALTH-PROTCOL-V35*
