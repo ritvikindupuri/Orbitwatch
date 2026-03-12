@@ -1,0 +1,38 @@
+{
+  "name": "orbitwatch-(use-this)",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "start": "node server.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.44.0",
+    "@tensorflow/tfjs": "4.22.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "leaflet": "1.9.4",
+    "lucide-react": "^0.576.0",
+    "motion": "^12.34.5",
+    "node-fetch": "^2.7.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-globe.gl": "2.31.1",
+    "react-leaflet": "5.0.0",
+    "react-markdown": "9.0.1",
+    "recharts": "2.15.0",
+    "satellite.js": "5.0.0",
+    "three": "0.170.0",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OrbitWatch | SDA Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --accent-blue: #3b82f6;
+        --accent-yellow: #facc15;
+        --accent-orange: #f97316;
+        --accent-red: #ef4444;
+        --bg-black: #000000;
+        --bg-surface: #0a0a0a;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-black);
+        color: #ffffff;
+        overflow: hidden;
+      }
+      .font-mono { font-family: 'Roboto Mono', monospace; }
+      .font-display { font-family: 'Rajdhani', sans-serif; }
+      
+      /* Stealth Scrollbars */
+      ::-webkit-scrollbar { width: 2px; height: 2px; }
+      ::-webkit-scrollbar-track { background: #000000; }
+      ::-webkit-scrollbar-thumb { background: #333333; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+      /* Globe Container - Deep Space */
+      #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+      .globe-container { flex: 1; min-height: 0; background: #000000; position: relative; z-index: 1; }
+      
+      /* High-Contrast Glassmorphism */
+      .glass-hud {
+        background: rgba(10, 10, 10, 0.85);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      .recharts-tooltip-wrapper { z-index: 100 !important; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react/": "https://esm.sh/react@19.0.0/",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "three": "https://esm.sh/three@0.170.0",
+    "three/": "https://esm.sh/three@0.170.0/",
+    "react-globe.gl": "https://esm.sh/react-globe.gl@2.31.1?external=react,react-dom,three",
+    "leaflet": "https://esm.sh/leaflet@1.9.4",
+    "react-leaflet": "https://esm.sh/react-leaflet@5.0.0?external=react,react-dom,leaflet",
+    "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
+    "satellite.js": "https://esm.sh/satellite.js@5.0.0",
+    "@tensorflow/tfjs": "https://esm.sh/@tensorflow/tfjs@4.22.0",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1?external=react,react-dom"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
