@@ -109,6 +109,29 @@ export const ChatBot: React.FC = () => {
 
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
+                            {messages.length === 1 && (
+                                <div className="grid grid-cols-1 gap-2 mb-4">
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1 ml-1">Suggested Intelligence Queries</p>
+                                    {[
+                                        "Search for STARLINK satellites",
+                                        "Show anomalies for USA assets",
+                                        "What are the SOPs for RPO?",
+                                        "Recent mission events for M-102",
+                                        "Status of NORAD ID 25544"
+                                    ].map((suggestion, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => {
+                                                setInput(suggestion);
+                                                // We don't auto-send to let them see what they're sending
+                                            }}
+                                            className="text-left p-2 bg-zinc-800/50 border border-zinc-700/50 rounded-lg text-xs text-cyan-400 hover:bg-zinc-700 transition-colors"
+                                        >
+                                            {suggestion}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             {messages.map((msg) => (
                                 <div 
                                     key={msg.id}
@@ -167,6 +190,9 @@ export const ChatBot: React.FC = () => {
                                     <span>Secure Relay</span>
                                 </div>
                             </div>
+                            <p className="mt-2 text-[9px] text-zinc-600 text-center uppercase tracking-widest font-mono">
+                                Use natural language. No exact indexes required.
+                            </p>
                         </div>
                     </motion.div>
                 )}
