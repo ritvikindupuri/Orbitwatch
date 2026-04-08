@@ -1,0 +1,78 @@
+# ============================================================================
+# ORBITWATCH DOCKER COMPOSE - PRODUCTION
+# ============================================================================
+# Uses Docker Secrets for credential management
+#
+# SETUP:
+#   1. Create secrets: mkdir -p secrets
+#   2. Add credentials to secrets/elastic_url and secrets/elastic_api_key
+#   3. Run: docker-compose up -d --build
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Frontend Service (nginx serving React app)
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      target: frontend
+    container_name: orbitwatch-frontend
+    ports:
+      - "8085:80"
+    depends_on:
+      relay:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orbitwatch-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # --------------------------------------------------------------------------
+  # Relay Service (Node.js middleware to Elasticsearch)
+  # --------------------------------------------------------------------------
+  relay:
+    build:
+      context: .
+      target: relay
+    container_name: orbitwatch-relay
+    expose:
+      - "3001"
+    environment:
+      - RELAY_PORT=3001
+      - NODE_ENV=production
+      - SATELLITE_INDEX=space-track-satellites
+      - FORENSIC_INDEX=sda-intelligence-ledger
+    secrets:
+      - elastic_url
+      - elastic_api_key
+    restart: unless-stopped
+    networks:
+      - orbitwatch-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# ----------------------------------------------------------------------------
+# Docker Secrets
+# ----------------------------------------------------------------------------
+secrets:
+  elastic_url:
+    file: ./secrets/elastic_url
+  elastic_api_key:
+    file: ./secrets/elastic_api_key
+
+# ----------------------------------------------------------------------------
+# Network
+# ----------------------------------------------------------------------------
+networks:
+  orbitwatch-net:
+    driver: bridge

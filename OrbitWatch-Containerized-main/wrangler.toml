@@ -1,0 +1,31 @@
+# Cloudflare Pages configuration
+# https://developers.cloudflare.com/pages/
+#
+# Deploy via Cloudflare Pages dashboard or:
+#   npx wrangler pages deploy dist
+#
+# Local dev (serves both static assets and Functions):
+#   npx wrangler pages dev dist --port 8788
+#   (run `npm run build` first, or use: npx wrangler pages dev --proxy 3000)
+
+name = "orbitwatch"
+pages_build_output_dir = "dist"
+
+# Non-secret index names — safe to commit
+[vars]
+SATELLITE_INDEX = "space-track-satellites"
+FORENSIC_INDEX = "sda-intelligence-ledger"
+INVESTIGATION_INDEX = "orbitwatch-investigations"
+
+# Runtime secrets for Pages Functions — set via dashboard or CLI, NEVER in this file:
+#   wrangler pages secret put ELASTIC_URL
+#   wrangler pages secret put ELASTIC_API_KEY
+#   wrangler pages secret put KIBANA_URL
+#
+# Local dev secrets (for `wrangler pages dev`):
+#   Copy .dev.vars.example → .dev.vars and fill in your values.
+#   .dev.vars is git-ignored — never commit it.
+#
+# Build-time secrets (embedded in frontend bundle by Vite):
+#   Set GEMINI_API_KEY in Cloudflare Pages dashboard > Settings > Environment variables
+#   (under "Build" tab, not "Production" secrets — it must be available during `npm run build`)
