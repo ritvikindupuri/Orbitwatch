@@ -17,7 +17,6 @@ export default function MapDisplay({ satelliteCatalog, alerts, selectedSatellite
     const containerRef = useRef<HTMLDivElement>(null);
     const [satPositions, setSatPositions] = useState<any[]>([]);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-    const [selectedPath, setSelectedPath] = useState<any[]>([]);
 
     // Ensure the globe tracks the parent container size exactly
     useLayoutEffect(() => {
@@ -92,37 +91,7 @@ export default function MapDisplay({ satelliteCatalog, alerts, selectedSatellite
                     lng: sat.lng, 
                     altitude: 0.35 
                 }, 1200);
-
-                // Calculate trajectory for selected satellite
-                const catalogEntry = satelliteCatalog.find(s => s.NORAD_CAT_ID === selectedSatelliteId);
-                if (catalogEntry) {
-                    const rec = satellite.twoline2satrec(catalogEntry.TLE_LINE1, catalogEntry.TLE_LINE2);
-                    if (!rec.error) {
-                        const pathPoints = [];
-                        const nowMs = Date.now();
-                        // 90 minutes future trajectory at 1-minute intervals
-                        for (let i = 0; i < 90; i++) {
-                            const time = new Date(nowMs + i * 60000);
-                            const posVel = satellite.propagate(rec, time);
-                            if (posVel.position && typeof posVel.position !== 'boolean') {
-                                const gmst = satellite.gstime(time);
-                                const gd = satellite.eciToGeodetic(posVel.position as satellite.EciVec3<number>, gmst);
-                                pathPoints.push({
-                                    lat: satellite.degreesLat(gd.latitude),
-                                    lng: satellite.degreesLong(gd.longitude),
-                                    alt: (gd.height / 6371) * 0.45
-                                });
-                            }
-                        }
-                        setSelectedPath([{
-                            path: pathPoints,
-                            color: sat.color
-                        }]);
-                    }
-                }
             }
-        } else {
-            setSelectedPath([]);
         }
     }, [selectedSatelliteId, satelliteCatalog]);
 
@@ -160,19 +129,9 @@ export default function MapDisplay({ satelliteCatalog, alerts, selectedSatellite
                     ringLat="lat"
                     ringLng="lng"
                     ringColor={(d: any) => getRiskHexColor(d.riskLevel)}
-                    ringMaxRadius={0.4}
+                    ringMaxRadius={0.1}
                     ringPropagationSpeed={0.5}
                     ringRepeatPeriod={1000}
-
-                    pathsData={selectedPath}
-                    pathPoints="path"
-                    pathPointLat="lat"
-                    pathPointLng="lng"
-                    pathPointAlt="alt"
-                    pathColor="color"
-                    pathDashLength={0.1}
-                    pathDashGap={0.05}
-                    pathDashAnimateTime={2000}
                     
                     backgroundColor="#000000"
                     onGlobeClick={() => onSelectSatellite(null)}
