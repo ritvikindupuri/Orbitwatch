@@ -167,8 +167,10 @@ export const App: React.FC = () => {
       const satrec = satellite.twoline2satrec(alert.satellite.TLE_LINE1, alert.satellite.TLE_LINE2);
       const posVel = satellite.propagate(satrec, new Date());
       const gmst = satellite.gstime(new Date());
-      const gd = satellite.eciToGeodetic(posVel.position as satellite.EciVec3<number>, gmst);
-      const velocity = Math.sqrt(Math.pow(posVel.velocity.x, 2) + Math.pow(posVel.velocity.y, 2) + Math.pow(posVel.velocity.z, 2));
+      const position = posVel.position as satellite.EciVec3<number>;
+      const velocityVec = posVel.velocity as satellite.EciVec3<number>;
+      const gd = satellite.eciToGeodetic(position, gmst);
+      const velocity = Math.sqrt(Math.pow(velocityVec.x, 2) + Math.pow(velocityVec.y, 2) + Math.pow(velocityVec.z, 2));
       const meanMotionSec = satrec.no / 60;
       const sma = Math.pow(MU / Math.pow(meanMotionSec, 2), 1 / 3);
       const isJamming = alert.details.riskScore > 70;

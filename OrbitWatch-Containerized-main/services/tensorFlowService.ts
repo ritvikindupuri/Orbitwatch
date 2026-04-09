@@ -164,7 +164,7 @@ class KNNAnomalyDetector {
             const normalizedX = tensorX.sub(mean).div(std);
             
             // Keep the normalized reference data in memory
-            this.referenceData = tf.keep(normalizedX);
+            this.referenceData = tf.keep(normalizedX) as tf.Tensor2D;
         });
         // Threshold is set heuristically for this implementation
         this.threshold = 3.0; 
@@ -211,7 +211,8 @@ function extractFeatures(sat: RealSatellite): number[] | null {
     // Falls back to LAUNCH_DATE if provided, then to 0 to avoid NaN poisoning the model.
     const currentYear = new Date().getFullYear();
     let launchYear: number = currentYear; // safe default
-    const cosparStr = (satrec.intldesg || '').trim();
+    const satrecAny = satrec as any;
+    const cosparStr = (satrecAny.intldesg || '').trim();
     if (cosparStr.length >= 2) {
         const cosparYY = parseInt(cosparStr.substring(0, 2), 10);
         launchYear = !isNaN(cosparYY) ? (cosparYY < 57 ? 2000 + cosparYY : 1900 + cosparYY) : currentYear;

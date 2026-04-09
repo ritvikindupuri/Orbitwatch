@@ -367,7 +367,7 @@ export const AnomalyDetailView: React.FC<AnomalyDetailViewProps> = ({ alert, onB
                                                                 <p className="text-[10px] text-cyan-400 font-bold tracking-widest mb-3 pb-2 border-b border-white/10 uppercase">Signal Attribute Ledger</p>
                                                                 <div className="space-y-2">
                                                                     <div className="flex justify-between text-[11px]"><span className="text-gray-500">FREQUENCY:</span> <span className="text-white font-bold">{p.freq} GHz</span></div>
-                                                                    <div className="flex justify-between text-[11px]"><span className="text-gray-500">INTENSITY:</span> <span className="text-white font-bold">{payload[0].value.toFixed(2)} dBm</span></div>
+                                                                    <div className="flex justify-between text-[11px]"><span className="text-gray-500">INTENSITY:</span> <span className="text-white font-bold">{Number(payload[0].value).toFixed(2)} dBm</span></div>
                                                                     <div className="flex justify-between text-[11px] pt-3 border-t border-white/5 mt-2">
                                                                         <span className="text-gray-600 uppercase font-black">JAMMING:</span> 
                                                                         <span className={p.isJamming ? "text-red-500 font-black animate-pulse" : "text-green-500 font-black"}>
