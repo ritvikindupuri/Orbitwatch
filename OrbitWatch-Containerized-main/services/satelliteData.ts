@@ -116,7 +116,7 @@ export async function fetchSatelliteCatalog(geoOnly: boolean = true, limit: numb
             throw new Error(`Relay returned ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as { satellites?: any[] };
 
         if (!data.satellites || data.satellites.length === 0) {
             throw new Error("EMPTY_CATALOG");
