@@ -10,6 +10,7 @@
 
 name = "orbitwatch"
 pages_build_output_dir = "dist"
+compatibility_date = "2024-04-05"
 
 # Non-secret index names — safe to commit
 [vars]
