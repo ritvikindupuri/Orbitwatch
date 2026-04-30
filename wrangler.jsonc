@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orbitwatch",
+  "compatibility_date": "2026-04-30",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "OrbitWatch-Containerized-main"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
