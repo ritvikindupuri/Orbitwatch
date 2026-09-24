@@ -1,0 +1,30 @@
+# Version control
+.git
+.gitignore
+
+# Environment and secrets - NEVER include in image
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+secrets/*
+!secrets/README.md
+
+# Dependencies (installed fresh in container)
+node_modules
+
+# Docker files (not needed in image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Documentation (not needed at runtime)
+README.md
+LICENSE
+TECHNICAL_SPEC.md
+metadata.json
+
+# Build artifacts from host (built fresh in container)
+dist

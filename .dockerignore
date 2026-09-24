@@ -1,0 +1,21 @@
+# Version control
+.git
+.gitignore
+
+# Environment and secrets - NEVER include in image
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+secrets/*
+!secrets/README.md
+
+# Dependencies
+node_modules
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
