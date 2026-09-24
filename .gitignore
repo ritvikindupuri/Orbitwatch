@@ -1,1 +1,13 @@
+# Dependencies
 node_modules
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# Secret files
+secrets/*
+!secrets/README.md
